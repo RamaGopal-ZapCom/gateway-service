@@ -1,0 +1,40 @@
+#!/bin/sh
+
+echo "***** Running pre-commit checks *****"
+
+# Get staged Java files
+FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.java$')
+
+if [ -z "$FILES" ]; then
+  echo "No Java files staged for commit."
+  exit 0
+fi
+
+# Stash uncommitted changes
+echo "Stashing uncommitted changes..."
+git stash push -u -k -m "pre-commit-temp"
+
+# Run unit tests
+echo "Running unit tests..."
+./gradlew test
+test_status=$?
+
+# Run Spotless check
+echo "Running Spotless code style check..."
+./gradlew spotlessCheck --console=plain
+spotless_status=$?
+
+# Re-apply stashed changes
+git stash pop
+
+# If any check failed, abort commit
+if [ "$test_status" -ne 0 ] || [ "$spotless_status" -ne 0 ]; then
+  echo "❌ Pre-commit checks failed."
+  if [ "$spotless_status" -ne 0 ]; then
+    echo "👉 Run './gradlew spotlessApply' to auto-correct formatting issues."
+  fi
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"
+exit 0
